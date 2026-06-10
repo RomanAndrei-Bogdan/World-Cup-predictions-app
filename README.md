@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚽ Pronosticuri CM 2026
 
-## Getting Started
+Aplicație web de pronosticuri la Cupa Mondială 2026, de jucat între prieteni.
 
-First, run the development server:
+## Cum funcționează
+
+- Fiecare jucător își face cont cu nume + parolă + **codul grupului** (ca să nu intre străini).
+- Dai pronosticuri (scor exact) la orice meci viitor; le poți modifica oricând **până la fluierul de start**, apoi se blochează.
+- După start, vezi și pronosticurile celorlalți la meciul respectiv.
+- Punctaj: **scor exact = 3 puncte**, **doar rezultatul corect (1/X/2) = 1 punct**. Punctajul se calculează pe scorul final înregistrat de API.
+- Rezultatele vin automat de la [football-data.org](https://www.football-data.org) (se sincronizează singure, cel mult o dată la 5 minute, când cineva deschide pagina).
+- **Primul cont creat devine admin**: vede butonul „Sincronizează" și poate corecta manual rezultate dacă API-ul are probleme (prin `POST /api/admin/result`).
+
+## Rulare locală
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # pornește pe http://localhost:3000
+npm run seed:demo    # opțional: meciuri demo ca să testezi fără token API
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Configurarea e în `.env.local` (vezi `.env.example` pentru toate variabilele).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Pașii de lansare (o singură dată, ~20 de minute)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Token-ul de la football-data.org (gratuit)
 
-## Learn More
+1. Înregistrează-te pe <https://www.football-data.org/client/register>.
+2. Primești token-ul pe email.
+3. Pune-l în variabila `FOOTBALL_DATA_TOKEN`.
 
-To learn more about Next.js, take a look at the following resources:
+Planul gratuit include Cupa Mondială (10 cereri/minut — mai mult decât suficient; aplicația face cel mult una la 5 minute).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Baza de date — Turso (gratuit)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Pe Vercel nu poți folosi fișierul SQLite local, ai nevoie de o bază găzduită:
 
-## Deploy on Vercel
+1. Cont pe <https://turso.tech> (planul gratuit ajunge cu vârf și îndesat).
+2. Creează o bază (ex. `worldcup`).
+3. Notează **URL-ul** (`libsql://worldcup-....turso.io`) → `DATABASE_URL`.
+4. Generează un **token de acces** pentru bază → `DATABASE_AUTH_TOKEN`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Găzduire — Vercel (gratuit)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Urcă proiectul pe GitHub (repo privat e ok):
+   ```bash
+   git add -A && git commit -m "Pronosticuri CM 2026"
+   ```
+   apoi creează repo-ul și fă push.
+2. Cont pe <https://vercel.com> (intră cu GitHub) → **Add New Project** → importă repo-ul.
+3. La **Environment Variables** setează:
+
+   | Variabilă | Valoare |
+   |---|---|
+   | `SESSION_SECRET` | un șir aleatoriu lung (minim 16 caractere) |
+   | `GROUP_CODE` | codul pe care îl dai prietenilor |
+   | `FOOTBALL_DATA_TOKEN` | token-ul de la pasul 1 |
+   | `DATABASE_URL` | URL-ul Turso de la pasul 2 |
+   | `DATABASE_AUTH_TOKEN` | token-ul Turso de la pasul 2 |
+
+4. **Deploy**. Primești un link de forma `https://world-cup-xxx.vercel.app`.
+
+### 4. Pornirea jocului
+
+1. Deschide linkul și **fă-ți tu primul cont** — primul cont devine admin.
+2. Apasă **🔄 Sincronizează** — se încarcă toate meciurile turneului.
+3. Trimite-le prietenilor linkul + codul grupului. Gata!
+
+## Tehnologii
+
+- [Next.js](https://nextjs.org) (App Router, TypeScript, Tailwind CSS)
+- SQLite prin [@libsql/client](https://github.com/tursodatabase/libsql-client-ts) — fișier local în dezvoltare, [Turso](https://turso.tech) în producție
+- Sesiuni proprii pe cookie semnat HMAC, parole cu scrypt — fără dependențe de autentificare externe
+
+## Structura
+
+```
+src/
+  lib/
+    db.ts        # conexiunea la bază + schema (se creează singură la pornire)
+    auth.ts      # hash parole (scrypt) + sesiuni (cookie semnat)
+    scoring.ts   # regulile de punctaj (3p exact / 1p rezultat)
+    sync.ts      # sincronizarea cu football-data.org
+  app/
+    page.tsx           # lista meciurilor + pronosticuri
+    clasament/         # clasamentul
+    auth/              # login / înscriere
+    api/               # rutele API (auth, matches, predictions, leaderboard, sync, admin)
+scripts/
+  seed-demo.mjs  # meciuri false pentru testare locală
+```
