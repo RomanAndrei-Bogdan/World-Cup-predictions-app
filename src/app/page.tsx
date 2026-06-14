@@ -293,6 +293,7 @@ export default function MatchesPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
+  const [showPlayed, setShowPlayed] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/matches");
@@ -327,9 +328,13 @@ export default function MatchesPage() {
     return <p className="mt-12 text-center text-foreground/50">Se încarcă...</p>;
   }
 
+  // meciurile terminate se ascund implicit, ca lista să rămână pe ce urmează
+  const playedCount = data.matches.filter((m) => m.status === "FINISHED").length;
+  const visible = showPlayed ? data.matches : data.matches.filter((m) => m.status !== "FINISHED");
+
   // grupează meciurile pe zile (în fusul orar local al utilizatorului)
   const byDay = new Map<string, Match[]>();
-  for (const m of data.matches) {
+  for (const m of visible) {
     const day = new Date(m.utcDate).toLocaleDateString("ro-RO", {
       weekday: "long",
       day: "numeric",
@@ -367,6 +372,17 @@ export default function MatchesPage() {
       </div>
 
       {syncMsg && <p className="mb-4 text-xs text-foreground/60">{syncMsg}</p>}
+
+      {playedCount > 0 && (
+        <button
+          onClick={() => setShowPlayed((v) => !v)}
+          className="mb-4 rounded-md border border-black/15 dark:border-white/20 px-3 py-1.5 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/10"
+        >
+          {showPlayed
+            ? `Ascunde meciurile jucate (${playedCount})`
+            : `Arată meciurile jucate (${playedCount})`}
+        </button>
+      )}
 
       {data.me.isAdmin && !data.hasApiToken && (
         <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
