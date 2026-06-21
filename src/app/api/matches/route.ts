@@ -60,6 +60,8 @@ export async function GET() {
       homeScore: m.home_score === null ? null : Number(m.home_score),
       awayScore: m.away_score === null ? null : Number(m.away_score),
       locked,
+      // rezultat corectat manual de admin (sincronizarea nu-l mai suprascrie)
+      resultLocked: Number(m.locked) === 1,
       myPrediction: mine ? { home: mine.home, away: mine.away } : null,
       myPoints:
         finished && mine

@@ -18,6 +18,7 @@ type Match = {
   homeScore: number | null;
   awayScore: number | null;
   locked: boolean;
+  resultLocked: boolean;
   myPrediction: { home: number; away: number } | null;
   myPoints: number | null;
   others: Other[];
@@ -67,6 +68,7 @@ const TEAM_NAMES_RO: Record<string, string> = {
   Croatia: "Croația",
   Scotland: "Scoția",
   Norway: "Norvegia",
+  Sweden: "Suedia",
   Italy: "Italia",
   Poland: "Polonia",
   Romania: "România",
@@ -199,6 +201,92 @@ function PredictionEditor({ match, onSaved }: { match: Match; onSaved: () => voi
   );
 }
 
+function AdminResult({ match, onSaved }: { match: Match; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [home, setHome] = useState(match.homeScore?.toString() ?? "");
+  const [away, setAway] = useState(match.awayScore?.toString() ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function send(payload: object) {
+    setBusy(true);
+    setError("");
+    const res = await fetch("/api/admin/result", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchId: match.id, ...payload }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      setOpen(false);
+      onSaved();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Eroare.");
+    }
+  }
+
+  const inputCls =
+    "w-12 rounded-md border border-black/15 dark:border-white/20 bg-transparent py-1 text-center font-semibold outline-none focus:border-emerald-500";
+
+  return (
+    <div className="mt-3 border-t border-black/5 dark:border-white/10 pt-2 text-center">
+      {match.resultLocked && (
+        <p className="mb-1 text-xs text-amber-600">🔒 Rezultat corectat manual</p>
+      )}
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="text-xs text-foreground/50 hover:text-foreground/80 hover:underline"
+        >
+          ✎ Admin: corectează rezultatul
+        </button>
+      ) : (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <input
+            className={inputCls}
+            inputMode="numeric"
+            value={home}
+            onChange={(e) => setHome(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            aria-label={`Scor corect ${match.home}`}
+          />
+          <span className="text-foreground/40">:</span>
+          <input
+            className={inputCls}
+            inputMode="numeric"
+            value={away}
+            onChange={(e) => setAway(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            aria-label={`Scor corect ${match.away}`}
+          />
+          <button
+            onClick={() => send({ home: Number(home), away: Number(away) })}
+            disabled={home === "" || away === "" || busy}
+            className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
+          >
+            Salvează
+          </button>
+          {match.resultLocked && (
+            <button
+              onClick={() => send({ unlock: true })}
+              disabled={busy}
+              className="rounded-md border border-black/15 dark:border-white/20 px-3 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-40"
+            >
+              Revino la API
+            </button>
+          )}
+          <button
+            onClick={() => setOpen(false)}
+            className="text-xs text-foreground/50 hover:underline"
+          >
+            Renunță
+          </button>
+          {error && <span className="text-xs text-red-500">{error}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PointsBadge({ points }: { points: number }) {
   const cls =
     points === 3
@@ -213,7 +301,15 @@ function PointsBadge({ points }: { points: number }) {
   );
 }
 
-function MatchCard({ match, onSaved }: { match: Match; onSaved: () => void }) {
+function MatchCard({
+  match,
+  onSaved,
+  isAdmin,
+}: {
+  match: Match;
+  onSaved: () => void;
+  isAdmin: boolean;
+}) {
   const kickoff = new Date(match.utcDate);
   const time = kickoff.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
   const live = match.status === "IN_PLAY" || match.status === "PAUSED";
@@ -283,6 +379,8 @@ function MatchCard({ match, onSaved }: { match: Match; onSaved: () => void }) {
           ))}
         </div>
       )}
+
+      {isAdmin && match.locked && <AdminResult match={match} onSaved={onSaved} />}
     </div>
   );
 }
@@ -405,7 +503,7 @@ export default function MatchesPage() {
           </h2>
           <div className="flex flex-col gap-3">
             {matches.map((m) => (
-              <MatchCard key={m.id} match={m} onSaved={load} />
+              <MatchCard key={m.id} match={m} onSaved={load} isAdmin={data.me.isAdmin} />
             ))}
           </div>
         </section>

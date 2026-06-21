@@ -37,6 +37,7 @@ async function createSchema(c: Client): Promise<void> {
         status TEXT NOT NULL,
         home_score INTEGER,
         away_score INTEGER,
+        locked INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT
       )`,
       `CREATE TABLE IF NOT EXISTS predictions (
@@ -54,6 +55,14 @@ async function createSchema(c: Client): Promise<void> {
     ],
     "write"
   );
+
+  // Migrare: tabela `matches` din producție a fost creată înainte de coloana
+  // `locked`. ALTER TABLE o adaugă; dacă există deja, ignorăm eroarea.
+  try {
+    await c.execute("ALTER TABLE matches ADD COLUMN locked INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // coloana există deja — ok
+  }
 }
 
 export async function db(): Promise<Client> {

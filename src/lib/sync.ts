@@ -57,9 +57,11 @@ export async function syncMatches(): Promise<{ synced: number }> {
             home_crest = excluded.home_crest,
             away_crest = excluded.away_crest,
             utc_date = excluded.utc_date,
-            status = excluded.status,
-            home_score = excluded.home_score,
-            away_score = excluded.away_score,
+            -- meciurile corectate manual de admin (locked=1) își păstrează
+            -- statusul și scorul; restul se actualizează de la API
+            status = CASE WHEN matches.locked = 1 THEN matches.status ELSE excluded.status END,
+            home_score = CASE WHEN matches.locked = 1 THEN matches.home_score ELSE excluded.home_score END,
+            away_score = CASE WHEN matches.locked = 1 THEN matches.away_score ELSE excluded.away_score END,
             updated_at = excluded.updated_at`,
     args: [
       String(m.id),
