@@ -149,19 +149,39 @@ function PredictionEditor({ match, onSaved }: { match: Match; onSaved: () => voi
   async function save() {
     setState("saving");
     setError("");
-    const res = await fetch("/api/predictions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId: match.id, home: Number(home), away: Number(away) }),
-    });
-    if (res.ok) {
-      setState("saved");
-      onSaved();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Eroare la salvare.");
-      setState("error");
+    const body = JSON.stringify({ matchId: match.id, home: Number(home), away: Number(away) });
+
+    // Reîncercăm la erori de rețea sau de server (5xx) — tipice pe conexiuni
+    // de mobil instabile sau la „trezirea" bazei de date. Niciodată nu rămânem
+    // blocați pe „saving": ieșim mereu fie pe „saved", fie pe „error".
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch("/api/predictions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (res.ok) {
+          setState("saved");
+          onSaved();
+          return;
+        }
+        // 4xx = problemă reală (scor invalid / meci început) — nu reîncercăm
+        if (res.status >= 400 && res.status < 500) {
+          const data = await res.json().catch(() => ({}));
+          setError(data.error ?? "Nu s-a putut salva.");
+          setState("error");
+          return;
+        }
+        // 5xx — cădem în pauza de mai jos și reîncercăm
+      } catch {
+        // eroare de rețea — reîncercăm
+      }
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
     }
+
+    setError("Conexiune instabilă — pronosticul NU s-a salvat. Mai apasă o dată.");
+    setState("error");
   }
 
   const inputCls =
