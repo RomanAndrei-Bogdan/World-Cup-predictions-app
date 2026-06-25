@@ -446,22 +446,40 @@ export default function MatchesPage() {
     return <p className="mt-12 text-center text-foreground/50">Se încarcă...</p>;
   }
 
-  // meciurile terminate se ascund implicit, ca lista să rămână pe ce urmează
-  const playedCount = data.matches.filter((m) => m.status === "FINISHED").length;
-  const visible = showPlayed ? data.matches : data.matches.filter((m) => m.status !== "FINISHED");
+  // grupează o listă de meciuri pe zile (în fusul orar local), păstrând ordinea
+  const groupByDay = (list: Match[]): [string, Match[]][] => {
+    const byDay = new Map<string, Match[]>();
+    for (const m of list) {
+      const day = new Date(m.utcDate).toLocaleDateString("ro-RO", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+      const arr = byDay.get(day);
+      if (arr) arr.push(m);
+      else byDay.set(day, [m]);
+    }
+    return [...byDay.entries()];
+  };
 
-  // grupează meciurile pe zile (în fusul orar local al utilizatorului)
-  const byDay = new Map<string, Match[]>();
-  for (const m of visible) {
-    const day = new Date(m.utcDate).toLocaleDateString("ro-RO", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    });
-    const list = byDay.get(day);
-    if (list) list.push(m);
-    else byDay.set(day, [m]);
-  }
+  // data.matches vine crescător (cel mai vechi întâi).
+  // Viitoarele/live rămân crescător (cel mai apropiat primul);
+  // jucatele se inversează → cel mai recent primul, cel mai vechi ultimul.
+  const upcomingDays = groupByDay(data.matches.filter((m) => m.status !== "FINISHED"));
+  const played = data.matches.filter((m) => m.status === "FINISHED").reverse();
+  const playedCount = played.length;
+  const playedDays = groupByDay(played);
+
+  const renderDay = ([day, matches]: [string, Match[]]) => (
+    <section key={day} className="mb-6">
+      <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-foreground/60">{day}</h2>
+      <div className="flex flex-col gap-3">
+        {matches.map((m) => (
+          <MatchCard key={m.id} match={m} onSaved={load} isAdmin={data.me.isAdmin} />
+        ))}
+      </div>
+    </section>
+  );
 
   return (
     <div>
@@ -516,18 +534,19 @@ export default function MatchesPage() {
         </p>
       )}
 
-      {[...byDay.entries()].map(([day, matches]) => (
-        <section key={day} className="mb-6">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-foreground/60">
-            {day}
-          </h2>
-          <div className="flex flex-col gap-3">
-            {matches.map((m) => (
-              <MatchCard key={m.id} match={m} onSaved={load} isAdmin={data.me.isAdmin} />
-            ))}
+      {showPlayed && playedDays.length > 0 && (
+        <>
+          <div className="mb-4 text-sm font-bold uppercase tracking-wide text-foreground/50">
+            Meciuri jucate · cele mai recente primele
           </div>
-        </section>
-      ))}
+          {playedDays.map(renderDay)}
+          <div className="mb-4 mt-2 border-t border-black/10 dark:border-white/15 pt-4 text-sm font-bold uppercase tracking-wide text-foreground/50">
+            Meciuri care urmează
+          </div>
+        </>
+      )}
+
+      {upcomingDays.map(renderDay)}
     </div>
   );
 }
